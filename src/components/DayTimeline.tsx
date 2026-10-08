@@ -2,8 +2,9 @@ import { useEffect, useRef, type CSSProperties } from 'react'
 import type { Task } from '../types/task'
 import { TimelineColumn } from './TimelineColumn'
 import styles from './DayTimeline.module.css'
+import type { ScheduleDragProps } from '../lib/scheduleDrag'
 
-interface Props {
+interface Props extends ScheduleDragProps {
   date: string
   tasks: Task[]
   disabled: boolean
@@ -13,7 +14,7 @@ interface Props {
   onEdit: (task: Task) => void
 }
 
-export function DayTimeline({ date, tasks, disabled, colorOf, onToggle, onSelectRange, onEdit }: Props) {
+export function DayTimeline({ date, tasks, disabled, colorOf, onToggle, onSelectRange, onEdit, ...dragProps }: Props) {
   const viewport = useRef<HTMLDivElement>(null)
   useEffect(() => { if (viewport.current) viewport.current.scrollTop = 6 * 72 }, [date])
   const untimed = tasks.filter((task) => !task.startTime || !task.endTime)
@@ -32,7 +33,7 @@ export function DayTimeline({ date, tasks, disabled, colorOf, onToggle, onSelect
         {Array.from({ length: 48 }, (_, i) => <div key={i} className={styles.row} style={{ top: i * 36 }}>
           <span>{`${String(Math.floor(i / 2)).padStart(2, '0')}:${i % 2 ? '30' : '00'}`}</span><div />
         </div>)}
-<TimelineColumn date={date} tasks={tasks} disabled={disabled} colorOf={colorOf} onSelectRange={onSelectRange} onEdit={onEdit} />
+<TimelineColumn {...dragProps} date={date} tasks={tasks} disabled={disabled} colorOf={colorOf} onSelectRange={onSelectRange} onEdit={onEdit} />
       </div>
     </div>
   </div>

@@ -28,3 +28,5 @@
 .events .block { z-index: 3; }
 .events.column { position: relative; left: 0; right: 0; height: 1764px; }
 .events .block.completed { background: var(--task-color); }
+.selection { font-size: 11px; padding: 4px; }
+.block[draggable='true'] { cursor: grab; }

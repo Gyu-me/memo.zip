@@ -7,6 +7,7 @@ import styles from "./App.module.css";
 import { DayTimeline } from "./components/DayTimeline";
 import { Popup } from "./components/Popup";
 import { WeekTimeline } from "./components/WeekTimeline";
+import { relocateTask, type ScheduleDrag } from './lib/scheduleDrag';
 
 const palette = [
   { id: "pink", name: "분홍", color: "#eaaac1" },
@@ -23,6 +24,10 @@ const colorOf = (task: Task) =>
 function App() {
   const [today, setToday] = useState(() => dateKey(new Date()));
   const [selected, setSelected] = useState(today);
+  const [draftDate, setDraftDate] = useState(today);
+  const [activeDrag, setActiveDrag] = useState<ScheduleDrag | null>(null);
+  const [dropDate, setDropDate] = useState<string | null>(null);
+  const [notice, setNotice] = useState('');
   const [view, setView] = useState<'month' | 'week'>('month');
   const [dayOpen, setDayOpen] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
@@ -81,8 +86,9 @@ function App() {
     setMemo('');
   };
 
-  const openEditor = (task?: Task, range?: { start: string; end: string }) => {
+  const openEditor = (task?: Task, range?: { start: string; end: string }, date = task?.date ?? selected) => {
     clearForm();
+    setDraftDate(date);
     setTitle(task?.title ?? ''); setMemo(task?.memo ?? '');
     setStart(task?.startTime ?? range?.start ?? ''); setEnd(task?.endTime ?? range?.end ?? '');
     setCategory(task?.categoryId ?? 'pink'); setEditing(task?.id ?? null);
@@ -109,6 +115,23 @@ function App() {
     }
   }
 
+  async function dropTask(task: Task, date: string, copy: boolean, range?: { start: string; end: string }) {
+    setActiveDrag(null); setDropDate(null);
+    if (busy || loading) return;
+    const original = tasks.find((record) => record.id === task.id);
+    if (!original) return;
+    if (!copy && original.date === date && (!range || (range.start === original.startTime && range.end === original.endTime))) return;
+    if (await mutate(() => taskRepository.save(relocateTask(original, date, copy, crypto.randomUUID(), new Date().toISOString(), range)))) {
+      selectDate(date); setNotice(copy ? '일정을 미완료 상태로 복제했어요.' : '일정을 이동했어요.');
+    }
+  }
+  const dragProps = {
+    activeDrag,
+    onDragStart: (task: Task, offset: number) => { setActiveDrag({ task, offset }); setNotice(''); },
+    onDragEnd: () => { setActiveDrag(null); setDropDate(null); },
+    onDropTask: (task: Task, date: string, copy: boolean, range?: { start: string; end: string }) => { void dropTask(task, date, copy, range); },
+  };
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!title.trim()) {
@@ -128,14 +151,14 @@ function App() {
       id: original?.id ?? crypto.randomUUID(),
       title: title.trim(),
       memo: memo.trim() || undefined,
-      date: selected,
+      date: draftDate,
       startTime: start || undefined,
       endTime: end || undefined,
       categoryId: category,
       completed: original?.completed ?? false,
       createdAt: original?.createdAt ?? new Date().toISOString(),
     };
-    if (await mutate(() => taskRepository.save(task))) { clearForm(); setEditorOpen(false); }
+    if (await mutate(() => taskRepository.save(task))) { selectDate(draftDate); clearForm(); setEditorOpen(false); setNotice('일정을 저장했어요.'); }
   }
 
   return (
@@ -179,6 +202,8 @@ function App() {
         <button aria-pressed={view === 'month'} onClick={() => setView('month')}>월간</button>
         <button aria-pressed={view === 'week'} onClick={() => setView('week')}>주간</button>
       </nav>
+      <p className={styles.note}>일정을 드래그하면 이동 · Ctrl/Command를 누르고 놓으면 복제</p>
+      {notice && <p role="status" className={styles.note}>{notice}</p>}
       <div className={styles.layout}>
         <section className={styles.content} aria-label={view === 'month' ? '월간 캘린더' : '주간 플래너'}>
           <div className={styles.banner}>
@@ -186,9 +211,9 @@ function App() {
             <h2>기억나는 건, 일단 적어두자.</h2>
             <p>작은 할 일도 차곡차곡 모아두는 곳 ✿</p>
           </div>
-          {view === 'week' ? <WeekTimeline selected={selected} today={today} tasks={tasks} disabled={busy || loading} colorOf={colorOf}
+          {view === 'week' ? <WeekTimeline {...dragProps} selected={selected} today={today} tasks={tasks} disabled={busy || loading} colorOf={colorOf}
             onSelectDate={selectDate}
-            onSelectRange={(date, start, end) => { selectDate(date); openEditor(undefined, { start, end }); }}
+            onSelectRange={(date, start, end) => { selectDate(date); openEditor(undefined, { start, end }, date); }}
             onEdit={(task) => { selectDate(task.date); openEditor(task); }}
             onToggle={(task) => { selectDate(task.date); void mutate(() => taskRepository.setCompleted(task.id, !task.completed)); }}
           /> : <div className={styles.calendar}>
@@ -203,7 +228,10 @@ function App() {
               return (
                 <div
                   key={key}
-                  className={`${styles.day} ${date.getMonth() !== month.getMonth() ? styles.outside : ""} ${selected === key ? styles.selected : ""}`}
+                  className={`${styles.day} ${date.getMonth() !== month.getMonth() ? styles.outside : ""} ${selected === key ? styles.selected : ""} ${activeDrag && dropDate === key ? styles.dropTarget : ''}`}
+                  onDragOver={(event) => { if (!activeDrag || busy) return; event.preventDefault(); event.dataTransfer.dropEffect = event.ctrlKey || event.metaKey ? 'copy' : 'move'; setDropDate(key); }}
+                  onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropDate(null); }}
+                  onDrop={(event) => { event.preventDefault(); if (activeDrag) void dropTask(activeDrag.task, key, event.ctrlKey || event.metaKey); }}
                 >
                   <button aria-label={`${key} 하루 시간표 열기`} className={styles.dateButton}
                     onClick={() => { selectDate(key); setDayOpen(true); }}
@@ -214,6 +242,9 @@ function App() {
                     {entries.slice(0, 3).map((task) => (
                       <button
                         key={task.id}
+                        draggable={!busy && !loading}
+                        onDragStart={(event) => { event.dataTransfer.setData('application/x-memo-task', task.id); event.dataTransfer.effectAllowed = 'copyMove'; dragProps.onDragStart(task, 0); }}
+                        onDragEnd={dragProps.onDragEnd}
                         aria-label={`${task.title} 하루 시간표 열기`}
                         onClick={() => { selectDate(key); setDayOpen(true); }}
                         className={`${styles.event} ${task.completed ? styles.done : ""}`}
@@ -323,12 +354,12 @@ function App() {
       </div>
       {dayOpen && <Popup title={`${selected} 하루 일정`} busy={busy} onClose={() => setDayOpen(false)}>
         <div className={styles.popupNav}><button onClick={() => { const date = fromDateKey(selected); date.setDate(date.getDate() - 1); selectDate(dateKey(date)); }}>이전 날</button><button onClick={() => { const date = fromDateKey(selected); date.setDate(date.getDate() + 1); selectDate(dateKey(date)); }}>다음 날</button><button onClick={() => openEditor()}>+ 할 일 추가</button></div>
-        <DayTimeline date={selected} tasks={daily} disabled={busy || loading} colorOf={colorOf} onToggle={(task) => void mutate(() => taskRepository.setCompleted(task.id, !task.completed))} onSelectRange={(start, end) => openEditor(undefined, { start, end })} onEdit={(task) => openEditor(task)} />
+        <DayTimeline {...dragProps} date={selected} tasks={daily} disabled={busy || loading} colorOf={colorOf} onToggle={(task) => void mutate(() => taskRepository.setCompleted(task.id, !task.completed))} onSelectRange={(start, end) => openEditor(undefined, { start, end })} onEdit={(task) => openEditor(task)} />
       </Popup>}
       {editorOpen && <Popup title={editing ? '할 일 수정' : '할 일 작성'} busy={busy} onClose={() => { clearForm(); setEditorOpen(false); }}>
-        <p>{selected}</p>
+        <label className={styles.dateField}>일정 날짜<input type="date" value={draftDate} disabled={busy} onInput={(e) => setDraftDate(e.currentTarget.value)} required form="task-form" /></label>
         {error && <p role="alert" className={styles.error}>{error}</p>}
-          <form onSubmit={submit} className={styles.form}>
+          <form id="task-form" onSubmit={submit} className={styles.form}>
             <label htmlFor="task-title">
               {editing ? "할 일 수정" : "새로운 할 일"}
             </label>
@@ -386,6 +417,7 @@ function App() {
             <button className={styles.primary} disabled={busy || loading}>
               {busy ? "저장 중…" : editing ? "수정 저장" : "+ 할 일 추가"}
             </button>
+{editing && <button type="button" disabled={busy} onClick={() => { setEditing(null); setNotice("복사할 내용을 확인하고 저장해주세요."); }}>복제해서 새 일정 작성</button>}
             {editing && (
               <button type="button" onClick={() => { clearForm(); setEditorOpen(false); }} disabled={busy}>
                 수정 취소
@@ -401,4 +433,3 @@ function App() {
 }
 
 export default App;
-

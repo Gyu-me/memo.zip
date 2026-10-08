@@ -3,8 +3,9 @@ import { dateKey, weekDays } from '../lib/calendar'
 import type { Task } from '../types/task'
 import { TimelineColumn } from './TimelineColumn'
 import styles from './WeekTimeline.module.css'
+import type { ScheduleDragProps } from '../lib/scheduleDrag'
 
-interface Props {
+interface Props extends ScheduleDragProps {
   selected: string
   today: string
   tasks: Task[]
@@ -16,7 +17,7 @@ interface Props {
   onToggle: (task: Task) => void
 }
 
-export function WeekTimeline({ selected, today, tasks, disabled, colorOf, onSelectDate, onSelectRange, onEdit, onToggle }: Props) {
+export function WeekTimeline({ selected, today, tasks, disabled, colorOf, onSelectDate, onSelectRange, onEdit, onToggle, ...dragProps }: Props) {
   const dates = weekDays(selected)
   const weekStart = dateKey(dates[0])
   const viewport = useRef<HTMLDivElement>(null)
@@ -61,7 +62,7 @@ export function WeekTimeline({ selected, today, tasks, disabled, colorOf, onSele
             {dates.map((date) => {
               const key = dateKey(date)
               return <div key={key} className={`${styles.day} ${key === selected ? styles.selected : ''}`}>
-                <TimelineColumn standalone date={key} tasks={tasks.filter((task) => task.date === key)} disabled={disabled} colorOf={colorOf}
+                <TimelineColumn {...dragProps} standalone date={key} tasks={tasks.filter((task) => task.date === key)} disabled={disabled} colorOf={colorOf}
                   onSelectRange={(start, end) => onSelectRange(key, start, end)} onEdit={onEdit} />
               </div>
             })}

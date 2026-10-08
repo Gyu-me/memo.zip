@@ -66,3 +66,6 @@
 .home button.event.done { background: var(--task-color); }
 .form textarea { width: 100%; resize: vertical; border: 1px solid var(--border); border-radius: 8px; padding: 10px; color: inherit; background: white; }
 .popupNav { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+.home .dropTarget { outline: 2px dashed #ac6686; outline-offset: -3px; background: var(--accent-soft); }
+.dateField { display: flex; align-items: center; gap: 12px; font-size: 13px; }
+.dateField input { border: 1px solid var(--border); border-radius: 8px; padding: 8px; color: inherit; }
