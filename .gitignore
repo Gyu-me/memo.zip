@@ -1,0 +1,54 @@
+# Dependencies
+node_modules/
+
+# Build and test output
+dist/
+build/
+coverage/
+playwright-report/
+test-results/
+*.tsbuildinfo
+.vite/
+
+# Local environment and secrets (including local examples)
+.env
+.env.*
+.env.example
+*.pem
+*.key
+
+# Local AI notes
+codex.md
+claude.md
+AGENTS.md
+PLAN.md
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Local editor and OS files
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.swp
+*.swo
+*.bak
+
+# Local hosting state
+.vercel/
+.netlify/
+.wrangler/
+
+# Temporary and private app data
+tmp/
+temp/
+local-data/
+private-backups/

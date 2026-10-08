@@ -1,0 +1,19 @@
+:root {
+  font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+  color: #51484f;
+  background: #faf5f6;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  --accent: #eaaac1;
+  --accent-soft: #fcf0f5;
+  --border: #efdce4;
+  --paper: #fffdfb;
+  --muted: #766771;
+  --radius: 20px;
+}
+* { box-sizing: border-box; }
+body { margin: 0; min-width: 320px; }
+button, input, textarea, select { font: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 3px solid #8064a8; outline-offset: 3px; }
+h1, h2, p { margin-top: 0; }

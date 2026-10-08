@@ -1,0 +1,12 @@
+#!/bin/sh
+
+branch=$(git symbolic-ref --quiet --short HEAD) || {
+  echo 'Commit blocked: switch to dev before committing.' >&2
+  exit 1
+}
+
+if [ "$branch" != 'dev' ]; then
+  echo "Commit blocked on '$branch'. Commits are allowed only on dev." >&2
+  echo 'Run: git switch dev (or git switch -c dev if it does not exist).' >&2
+  exit 1
+fi
