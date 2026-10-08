@@ -1,0 +1,23 @@
+.wrapper { border: 1px solid var(--border); border-radius: 16px; overflow: hidden; }
+.heading { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; padding: 18px; border-bottom: 1px solid var(--border); }
+.heading h2 { font-size: 16px; margin: 0; }
+.heading span { font-size: 12px; color: var(--muted); }
+.untimed { padding: 16px 18px; background: #fff9f6; border-bottom: 1px solid var(--border); }
+.untimed h3 { font-size: 12px; margin: 0 0 10px; color: var(--muted); }
+.untimed > div { display: flex; flex-wrap: wrap; gap: 8px; }
+.untimed button { border-left: 4px solid var(--task-color) !important; font-size: 12px; max-width: 100%; overflow-wrap: anywhere; }
+.untimed p, .empty { font-size: 12px; color: var(--muted); margin: 0; }
+.empty { padding: 12px 18px; }
+.viewport { height: 520px; overflow-y: auto; position: relative; }
+.timeline { position: relative; height: 1764px; margin-right: 12px; }
+.row { position: absolute; display: flex; width: 100%; height: 36px; }
+.row > span { width: 60px; flex-shrink: 0; font-size: 11px; color: var(--muted); text-align: center; padding-top: 4px; }
+.row > div { flex: 1; border-top: 1px solid var(--border); }
+.row:nth-child(even) > div { border-top-style: dashed; }
+.events { position: absolute; left: 60px; right: 0; top: 0; bottom: 0; }
+.events .block { position: absolute; border: 1px solid var(--task-color); border-left: 4px solid var(--task-color); border-radius: 6px; background: #fffdfb; text-align: left; padding: 3px 8px; overflow: hidden; display: flex; flex-direction: column; gap: 2px; }
+.title { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; width: 100%; }
+.block small { font-size: 10px; }
+.wrapper button.completed { background: var(--task-color); }
+.completed .title { text-decoration: line-through; }
+@media (max-width: 700px) { .viewport { height: 420px; } .events { left: 48px; } .row > span { width: 48px; } .events .block { padding: 3px; } }

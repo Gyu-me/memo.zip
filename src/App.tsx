@@ -4,6 +4,7 @@ import { taskRepository } from "./repositories/taskRepository";
 import { dateKey, fromDateKey, monthDays } from "./lib/calendar";
 import type { Task } from "./types/task";
 import styles from "./App.module.css";
+import { DayTimeline } from "./components/DayTimeline";
 
 const palette = [
   { id: "pink", name: "분홍", color: "#eaaac1" },
@@ -20,6 +21,7 @@ const colorOf = (task: Task) =>
 function App() {
   const [today, setToday] = useState(() => dateKey(new Date()));
   const [selected, setSelected] = useState(today);
+  const [view, setView] = useState<'month' | 'day'>('month');
   const [month, setMonth] = useState(
     () => new Date(new Date().getFullYear(), new Date().getMonth(), 1),
   );
@@ -132,22 +134,22 @@ function App() {
           <p className={styles.eyebrow}>돌쇠의 작은 기록방</p>
           <h1>memo.zip</h1>
         </div>
-        <nav className={styles.monthNav} aria-label="월 이동">
+        <nav className={styles.monthNav} aria-label="날짜 이동">
           <button
-            aria-label="이전 달"
+            aria-label={view === 'month' ? '이전 달' : '이전 날'}
             onClick={() =>
-              setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))
+              view === 'month' ? setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1)) : selectDate(dateKey(new Date(fromDateKey(selected).getFullYear(), fromDateKey(selected).getMonth(), fromDateKey(selected).getDate() - 1)))
             }
           >
             ‹
           </button>
           <h2>
-            {month.getFullYear()}년 {month.getMonth() + 1}월
+            {view === 'month' ? `${month.getFullYear()}년 ${month.getMonth() + 1}월` : fromDateKey(selected).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' })}
           </h2>
           <button
-            aria-label="다음 달"
+            aria-label={view === 'month' ? '다음 달' : '다음 날'}
             onClick={() =>
-              setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))
+              view === 'month' ? setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1)) : selectDate(dateKey(new Date(fromDateKey(selected).getFullYear(), fromDateKey(selected).getMonth(), fromDateKey(selected).getDate() + 1)))
             }
           >
             ›
@@ -155,14 +157,18 @@ function App() {
           <button onClick={() => selectDate(dateKey(new Date()))}>오늘</button>
         </nav>
       </div>
+      <nav className={styles.viewTabs} aria-label="일정 보기">
+        <button aria-pressed={view === 'month'} onClick={() => setView('month')}>월간</button>
+        <button aria-pressed={view === 'day'} onClick={() => setView('day')}>일간</button>
+      </nav>
       <div className={styles.layout}>
-        <section className={styles.content} aria-label="월간 캘린더">
+        <section className={styles.content} aria-label={view === 'month' ? '월간 캘린더' : '일간 시간표'}>
           <div className={styles.banner}>
             <span>dear my days</span>
             <h2>기억나는 건, 일단 적어두자.</h2>
             <p>작은 할 일도 차곡차곡 모아두는 곳 ✿</p>
           </div>
-          <div className={styles.calendar}>
+          {view === 'day' ? <DayTimeline date={selected} tasks={daily} disabled={busy || loading} colorOf={colorOf} onToggle={(task) => void mutate(() => taskRepository.setCompleted(task.id, !task.completed))} /> : <div className={styles.calendar}>
             {["월", "화", "수", "목", "금", "토", "일"].map((day) => (
               <div className={styles.weekday} key={day}>
                 {day}
@@ -207,7 +213,7 @@ function App() {
                 </button>
               );
             })}
-          </div>
+          </div>}
         </section>
         <aside className={styles.sidebar} aria-label="선택 날짜 할 일">
           <div className={styles.character} aria-hidden="true">
@@ -249,7 +255,7 @@ function App() {
                 <input
                   type="time"
                   value={start}
-                  onChange={(e) => setStart(e.target.value)}
+                  onInput={(e) => setStart(e.currentTarget.value)}
                   disabled={busy}
                 />
               </label>
@@ -258,7 +264,7 @@ function App() {
                 <input
                   type="time"
                   value={end}
-                  onChange={(e) => setEnd(e.target.value)}
+                  onInput={(e) => setEnd(e.currentTarget.value)}
                   disabled={busy}
                 />
               </label>
