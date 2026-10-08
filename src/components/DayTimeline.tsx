@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState, type CSSProperties, type PointerEvent } from 'react'
+import { useEffect, useRef, type CSSProperties } from 'react'
 import type { Task } from '../types/task'
-import { timelineLayout, dragRange } from '../lib/timeline'
+import { TimelineColumn } from './TimelineColumn'
 import styles from './DayTimeline.module.css'
 
 interface Props {
@@ -15,10 +15,7 @@ interface Props {
 
 export function DayTimeline({ date, tasks, disabled, colorOf, onToggle, onSelectRange, onEdit }: Props) {
   const viewport = useRef<HTMLDivElement>(null)
-  const [selection, setSelection] = useState<{ anchor: number; current: number } | null>(null)
-  const slotAt = (event: PointerEvent<HTMLDivElement>) => Math.max(0, Math.min(47, Math.floor((event.clientY - event.currentTarget.getBoundingClientRect().top) / 36)))
   useEffect(() => { if (viewport.current) viewport.current.scrollTop = 6 * 72 }, [date])
-  const timed = timelineLayout(tasks)
   const untimed = tasks.filter((task) => !task.startTime || !task.endTime)
   return <div className={styles.wrapper}>
     <div className={styles.heading}><h2>하루 시간표</h2><span>빈 시간을 드래그해서 추가 · 일정 클릭으로 수정</span></div>
@@ -35,24 +32,9 @@ export function DayTimeline({ date, tasks, disabled, colorOf, onToggle, onSelect
         {Array.from({ length: 48 }, (_, i) => <div key={i} className={styles.row} style={{ top: i * 36 }}>
           <span>{`${String(Math.floor(i / 2)).padStart(2, '0')}:${i % 2 ? '30' : '00'}`}</span><div />
         </div>)}
-        <div className={styles.events}
-          onPointerDown={(event) => { if (disabled || event.button !== 0 || (event.target as HTMLElement).closest('[data-event]')) return; event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId); const slot = slotAt(event); setSelection({ anchor: slot, current: slot }) }}
-          onPointerMove={(event) => { if (selection) setSelection({ ...selection, current: slotAt(event) }) }}
-          onPointerUp={(event) => { if (!selection) return; const range = dragRange(selection.anchor, slotAt(event)); setSelection(null); onSelectRange(range.start, range.end) }}
-          onPointerCancel={() => setSelection(null)}>
-          {Array.from({ length: 48 }, (_, i) => <button key={i} className={styles.slot} disabled={disabled} style={{ top: i * 36 }} aria-label={`${dragRange(i, i).start} 일정 추가`}
-            onClick={(event) => { if (event.detail === 0) { const range = dragRange(i, i); onSelectRange(range.start, range.end) } }} />)}
-          {selection && <div className={styles.selection} style={{ top: Math.min(selection.anchor, selection.current) * 36, height: (Math.abs(selection.anchor - selection.current) + 1) * 36 }} />}
-          {timed.map(({ task, start, end, column, columns }) => <button key={task.id}
-            data-event disabled={disabled} aria-label={`${task.title} ${task.startTime}부터 ${task.endTime}, 수정`}
-            className={`${styles.block} ${task.completed ? styles.completed : ''}`}
-            style={{ '--task-color': colorOf(task), top: start * 1.2, height: Math.max(36, (end - start) * 1.2), left: `${column / columns * 100}%`, width: `${100 / columns}%` } as CSSProperties}
-            onClick={() => onEdit(task)} title={`${task.title} · ${task.startTime}–${task.endTime}`}>
-            <span className={styles.title}>{task.completed ? '✓ ' : '○ '}{task.title}</span>
-            <small>{task.startTime}–{task.endTime}</small>
-          </button>)}
-        </div>
+<TimelineColumn date={date} tasks={tasks} disabled={disabled} colorOf={colorOf} onSelectRange={onSelectRange} onEdit={onEdit} />
       </div>
     </div>
   </div>
 }
+

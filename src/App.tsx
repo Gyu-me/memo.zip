@@ -1,11 +1,12 @@
 import { useEffect, useState, type CSSProperties, type FormEvent } from "react";
 import { liveQuery } from "dexie";
 import { taskRepository } from "./repositories/taskRepository";
-import { dateKey, fromDateKey, monthDays } from "./lib/calendar";
+import { dateKey, fromDateKey, monthDays, weekDays, shiftDate } from "./lib/calendar";
 import type { Task } from "./types/task";
 import styles from "./App.module.css";
 import { DayTimeline } from "./components/DayTimeline";
 import { Popup } from "./components/Popup";
+import { WeekTimeline } from "./components/WeekTimeline";
 
 const palette = [
   { id: "pink", name: "분홍", color: "#eaaac1" },
@@ -22,6 +23,7 @@ const colorOf = (task: Task) =>
 function App() {
   const [today, setToday] = useState(() => dateKey(new Date()));
   const [selected, setSelected] = useState(today);
+  const [view, setView] = useState<'month' | 'week'>('month');
   const [dayOpen, setDayOpen] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
   const [memo, setMemo] = useState('');
@@ -70,6 +72,7 @@ function App() {
         a.createdAt.localeCompare(b.createdAt),
     );
   const completed = daily.filter((task) => task.completed).length;
+  const week = weekDays(selected);
   const clearForm = () => {
     setTitle("");
     setStart("");
@@ -151,20 +154,20 @@ function App() {
         </div>
         <nav className={styles.monthNav} aria-label="날짜 이동">
           <button
-            aria-label="이전 달"
+            aria-label={view === 'month' ? '이전 달' : '이전 주'}
             onClick={() =>
-              setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))
+              view === 'month' ? setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1)) : selectDate(shiftDate(selected, -7))
             }
           >
             ‹
           </button>
           <h2>
-            {month.getFullYear()}년 {month.getMonth() + 1}월
+            {view === 'month' ? `${month.getFullYear()}년 ${month.getMonth() + 1}월` : `${dateKey(week[0])} ~ ${dateKey(week[6])}`}
           </h2>
           <button
-            aria-label="다음 달"
+            aria-label={view === 'month' ? '다음 달' : '다음 주'}
             onClick={() =>
-              setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))
+              view === 'month' ? setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1)) : selectDate(shiftDate(selected, 7))
             }
           >
             ›
@@ -172,14 +175,23 @@ function App() {
           <button onClick={() => selectDate(dateKey(new Date()))}>오늘</button>
         </nav>
       </div>
+      <nav className={styles.viewTabs} aria-label="일정 보기">
+        <button aria-pressed={view === 'month'} onClick={() => setView('month')}>월간</button>
+        <button aria-pressed={view === 'week'} onClick={() => setView('week')}>주간</button>
+      </nav>
       <div className={styles.layout}>
-        <section className={styles.content} aria-label="월간 캘린더">
+        <section className={styles.content} aria-label={view === 'month' ? '월간 캘린더' : '주간 플래너'}>
           <div className={styles.banner}>
             <span>dear my days</span>
             <h2>기억나는 건, 일단 적어두자.</h2>
             <p>작은 할 일도 차곡차곡 모아두는 곳 ✿</p>
           </div>
-          <div className={styles.calendar}>
+          {view === 'week' ? <WeekTimeline selected={selected} today={today} tasks={tasks} disabled={busy || loading} colorOf={colorOf}
+            onSelectDate={selectDate}
+            onSelectRange={(date, start, end) => { selectDate(date); openEditor(undefined, { start, end }); }}
+            onEdit={(task) => { selectDate(task.date); openEditor(task); }}
+            onToggle={(task) => { selectDate(task.date); void mutate(() => taskRepository.setCompleted(task.id, !task.completed)); }}
+          /> : <div className={styles.calendar}>
             {["월", "화", "수", "목", "금", "토", "일"].map((day) => (
               <div className={styles.weekday} key={day}>
                 {day}
@@ -223,7 +235,7 @@ function App() {
                 </div>
               );
             })}
-          </div>
+          </div>}
         </section>
         <aside className={styles.sidebar} aria-label="선택 날짜 할 일">
           <div className={styles.character} aria-hidden="true">

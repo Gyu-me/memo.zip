@@ -26,3 +26,5 @@
 .slot:focus-visible { outline-offset: -3px; }
 .selection { position: absolute; left: 0; right: 0; background: #eaaac166; border: 2px dashed #ac6686; pointer-events: none; z-index: 2; }
 .events .block { z-index: 3; }
+.events.column { position: relative; left: 0; right: 0; height: 1764px; }
+.events .block.completed { background: var(--task-color); }
