@@ -1,0 +1,6 @@
+.popup { width: min(850px, calc(100% - 24px)); max-height: calc(100dvh - 32px); overflow-y: auto; border: 1px solid var(--border); border-radius: 20px; background: var(--paper); color: inherit; padding: 20px; }
+.popup::backdrop { background: #51484f66; }
+.popup > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
+.popup > header h2 { margin: 0; font-size: 18px; }
+.popup button { border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; background: white; color: inherit; }
+.popup button:disabled { opacity: .6; }

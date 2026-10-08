@@ -1,7 +1,14 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { timeMinutes, timelineLayout } from '../src/lib/timeline.ts'
+import { timeMinutes, timelineLayout, dragRange } from '../src/lib/timeline.ts'
 const item = (id, startTime, endTime) => ({ id, startTime, endTime })
+
+test('drag normalizes both directions and includes the last half-hour slot', () => {
+  assert.deepEqual(dragRange(18, 20), { start: '09:00', end: '10:30' })
+  assert.deepEqual(dragRange(20, 18), { start: '09:00', end: '10:30' })
+  assert.deepEqual(dragRange(47, 47), { start: '23:30', end: '24:00' })
+  assert.deepEqual(dragRange(-2, 100), { start: '00:00', end: '24:00' })
+})
 
 test('time converts to minutes and untimed tasks stay out of timeline', () => {
   assert.equal(timeMinutes('06:30'), 390)

@@ -3,6 +3,13 @@ export function timeMinutes(time: string): number {
   return hours * 60 + minutes
 }
 
+export function dragRange(anchor: number, current: number) {
+  const first = Math.max(0, Math.min(47, anchor))
+  const last = Math.max(0, Math.min(47, current))
+  const format = (minutes: number) => `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`
+  return { start: format(Math.min(first, last) * 30), end: format((Math.max(first, last) + 1) * 30) }
+}
+
 interface TimedItem { id: string; startTime?: string; endTime?: string }
 
 // Connected overlapping intervals share columns; touching intervals do not overlap.

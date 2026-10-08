@@ -5,6 +5,7 @@ import { dateKey, fromDateKey, monthDays } from "./lib/calendar";
 import type { Task } from "./types/task";
 import styles from "./App.module.css";
 import { DayTimeline } from "./components/DayTimeline";
+import { Popup } from "./components/Popup";
 
 const palette = [
   { id: "pink", name: "분홍", color: "#eaaac1" },
@@ -21,7 +22,9 @@ const colorOf = (task: Task) =>
 function App() {
   const [today, setToday] = useState(() => dateKey(new Date()));
   const [selected, setSelected] = useState(today);
-  const [view, setView] = useState<'month' | 'day'>('month');
+  const [dayOpen, setDayOpen] = useState(false);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [memo, setMemo] = useState('');
   const [month, setMonth] = useState(
     () => new Date(new Date().getFullYear(), new Date().getMonth(), 1),
   );
@@ -72,6 +75,15 @@ function App() {
     setStart("");
     setEnd("");
     setEditing(null);
+    setMemo('');
+  };
+
+  const openEditor = (task?: Task, range?: { start: string; end: string }) => {
+    clearForm();
+    setTitle(task?.title ?? ''); setMemo(task?.memo ?? '');
+    setStart(task?.startTime ?? range?.start ?? ''); setEnd(task?.endTime ?? range?.end ?? '');
+    setCategory(task?.categoryId ?? 'pink'); setEditing(task?.id ?? null);
+    setError(''); setEditorOpen(true);
   };
   const selectDate = (key: string) => {
     setSelected(key);
@@ -100,7 +112,9 @@ function App() {
       setError("할 일을 입력해주세요.");
       return;
     }
-    if ((start && !end) || (!start && end) || (start && end && end <= start)) {
+    const validStart = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
+    const validEnd = /^(?:(?:[01]\d|2[0-3]):[0-5]\d|24:00)$/;
+    if ((start && !end) || (!start && end) || (start && end && (!validStart.test(start) || !validEnd.test(end) || end <= start))) {
       setError(
         "시작과 종료 시간을 함께 입력하고 종료를 시작보다 늦게 설정해주세요.",
       );
@@ -110,6 +124,7 @@ function App() {
     const task: Task = {
       id: original?.id ?? crypto.randomUUID(),
       title: title.trim(),
+      memo: memo.trim() || undefined,
       date: selected,
       startTime: start || undefined,
       endTime: end || undefined,
@@ -117,7 +132,7 @@ function App() {
       completed: original?.completed ?? false,
       createdAt: original?.createdAt ?? new Date().toISOString(),
     };
-    if (await mutate(() => taskRepository.save(task))) clearForm();
+    if (await mutate(() => taskRepository.save(task))) { clearForm(); setEditorOpen(false); }
   }
 
   return (
@@ -136,20 +151,20 @@ function App() {
         </div>
         <nav className={styles.monthNav} aria-label="날짜 이동">
           <button
-            aria-label={view === 'month' ? '이전 달' : '이전 날'}
+            aria-label="이전 달"
             onClick={() =>
-              view === 'month' ? setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1)) : selectDate(dateKey(new Date(fromDateKey(selected).getFullYear(), fromDateKey(selected).getMonth(), fromDateKey(selected).getDate() - 1)))
+              setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))
             }
           >
             ‹
           </button>
           <h2>
-            {view === 'month' ? `${month.getFullYear()}년 ${month.getMonth() + 1}월` : fromDateKey(selected).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' })}
+            {month.getFullYear()}년 {month.getMonth() + 1}월
           </h2>
           <button
-            aria-label={view === 'month' ? '다음 달' : '다음 날'}
+            aria-label="다음 달"
             onClick={() =>
-              view === 'month' ? setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1)) : selectDate(dateKey(new Date(fromDateKey(selected).getFullYear(), fromDateKey(selected).getMonth(), fromDateKey(selected).getDate() + 1)))
+              setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))
             }
           >
             ›
@@ -157,18 +172,14 @@ function App() {
           <button onClick={() => selectDate(dateKey(new Date()))}>오늘</button>
         </nav>
       </div>
-      <nav className={styles.viewTabs} aria-label="일정 보기">
-        <button aria-pressed={view === 'month'} onClick={() => setView('month')}>월간</button>
-        <button aria-pressed={view === 'day'} onClick={() => setView('day')}>일간</button>
-      </nav>
       <div className={styles.layout}>
-        <section className={styles.content} aria-label={view === 'month' ? '월간 캘린더' : '일간 시간표'}>
+        <section className={styles.content} aria-label="월간 캘린더">
           <div className={styles.banner}>
             <span>dear my days</span>
             <h2>기억나는 건, 일단 적어두자.</h2>
             <p>작은 할 일도 차곡차곡 모아두는 곳 ✿</p>
           </div>
-          {view === 'day' ? <DayTimeline date={selected} tasks={daily} disabled={busy || loading} colorOf={colorOf} onToggle={(task) => void mutate(() => taskRepository.setCompleted(task.id, !task.completed))} /> : <div className={styles.calendar}>
+          <div className={styles.calendar}>
             {["월", "화", "수", "목", "금", "토", "일"].map((day) => (
               <div className={styles.weekday} key={day}>
                 {day}
@@ -178,22 +189,21 @@ function App() {
               const key = dateKey(date);
               const entries = tasks.filter((task) => task.date === key);
               return (
-                <button
+                <div
                   key={key}
-                  aria-label={`${key} 일정 ${entries.length}개`}
-                  aria-pressed={selected === key}
                   className={`${styles.day} ${date.getMonth() !== month.getMonth() ? styles.outside : ""} ${selected === key ? styles.selected : ""}`}
-                  onClick={() => selectDate(key)}
                 >
-                  <span
-                    className={key === today ? styles.today : styles.dayNumber}
+                  <button aria-label={`${key} 하루 시간표 열기`} className={styles.dateButton}
+                    onClick={() => { selectDate(key); setDayOpen(true); }}
                   >
-                    {date.getDate()}
-                  </span>
+                    <span className={key === today ? styles.today : styles.dayNumber}>{date.getDate()}</span>
+                  </button>
                   <span className={styles.entries}>
                     {entries.slice(0, 3).map((task) => (
-                      <span
+                      <button
                         key={task.id}
+                        aria-label={`${task.title} 하루 시간표 열기`}
+                        onClick={() => { selectDate(key); setDayOpen(true); }}
                         className={`${styles.event} ${task.completed ? styles.done : ""}`}
                         style={
                           { "--task-color": colorOf(task) } as CSSProperties
@@ -202,7 +212,7 @@ function App() {
                         {task.completed ? "✓ " : ""}
                         {task.startTime ? `${task.startTime} ` : ""}
                         {task.title}
-                      </span>
+                      </button>
                     ))}
                     {entries.length > 3 && (
                       <span className={styles.more}>
@@ -210,10 +220,10 @@ function App() {
                       </span>
                     )}
                   </span>
-                </button>
+                </div>
               );
             })}
-          </div>}
+          </div>
         </section>
         <aside className={styles.sidebar} aria-label="선택 날짜 할 일">
           <div className={styles.character} aria-hidden="true">
@@ -236,6 +246,76 @@ function App() {
               {error}
             </p>
           )}
+<button className={styles.primary} disabled={busy || loading} onClick={() => openEditor()}>+ 할 일 추가</button><button onClick={() => setDayOpen(true)}>하루 시간표 열기</button>
+          <ul className={styles.taskList}>
+            {daily.map((task) => (
+              <li
+                key={task.id}
+                className={task.completed ? styles.completedTask : ""}
+              >
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={task.completed}
+                    disabled={busy || loading}
+                    onChange={() =>
+                      void mutate(() =>
+                        taskRepository.setCompleted(task.id, !task.completed),
+                      )
+                    }
+                  />
+                  <span>
+                    <span>{task.title}</span>
+                    {task.startTime && (
+                      <small>
+                        {task.startTime}–{task.endTime}
+                      </small>
+                    )}
+                  </span>
+                </label>
+                <div className={styles.actions}>
+                  <button
+                    aria-label={`${task.title} 수정`}
+                    disabled={busy}
+                    onClick={() => { setDayOpen(true); openEditor(task); }}
+                  >
+                    수정
+                  </button>
+                  <button
+                    aria-label={`${task.title} 삭제`}
+                    disabled={busy}
+                    onClick={() => {
+                      if (window.confirm(`“${task.title}”을 삭제할까요?`))
+                        void mutate(() => taskRepository.remove(task.id)).then(
+                          (saved) => {
+                            if (saved && editing === task.id) clearForm();
+                          },
+                        );
+                    }}
+                  >
+                    삭제
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+          {!loading && !daily.length && (
+            <p className={styles.empty}>
+              아직 적어둔 할 일이 없어요.
+              <br />
+              오늘의 첫 기록을 남겨보세요 ♡
+            </p>
+          )}
+          <p className={styles.note}>기록은 이 브라우저에 저장돼요.</p>
+        </aside>
+      </div>
+      {dayOpen && <Popup title={`${selected} 하루 일정`} busy={busy} onClose={() => setDayOpen(false)}>
+        <div className={styles.popupNav}><button onClick={() => { const date = fromDateKey(selected); date.setDate(date.getDate() - 1); selectDate(dateKey(date)); }}>이전 날</button><button onClick={() => { const date = fromDateKey(selected); date.setDate(date.getDate() + 1); selectDate(dateKey(date)); }}>다음 날</button><button onClick={() => openEditor()}>+ 할 일 추가</button></div>
+        <DayTimeline date={selected} tasks={daily} disabled={busy || loading} colorOf={colorOf} onToggle={(task) => void mutate(() => taskRepository.setCompleted(task.id, !task.completed))} onSelectRange={(start, end) => openEditor(undefined, { start, end })} onEdit={(task) => openEditor(task)} />
+      </Popup>}
+      {editorOpen && <Popup title={editing ? '할 일 수정' : '할 일 작성'} busy={busy} onClose={() => { clearForm(); setEditorOpen(false); }}>
+        <p>{selected}</p>
+        {error && <p role="alert" className={styles.error}>{error}</p>}
           <form onSubmit={submit} className={styles.form}>
             <label htmlFor="task-title">
               {editing ? "할 일 수정" : "새로운 할 일"}
@@ -249,11 +329,11 @@ function App() {
               required
               disabled={busy || loading}
             />
-            <div className={styles.times}>
+            <label htmlFor="task-memo">메모</label><textarea id="task-memo" value={memo} onChange={(e) => setMemo(e.target.value)} rows={4} maxLength={5000} disabled={busy} placeholder="기억해둘 내용을 적어주세요" /><div className={styles.times}>
               <label>
                 시작 (선택)
                 <input
-                  type="time"
+                  type="text" inputMode="numeric" placeholder="HH:mm" pattern="(?:[01][0-9]|2[0-3]):[0-5][0-9]|24:00"
                   value={start}
                   onInput={(e) => setStart(e.currentTarget.value)}
                   disabled={busy}
@@ -262,7 +342,7 @@ function App() {
               <label>
                 종료 (선택)
                 <input
-                  type="time"
+                  type="text" inputMode="numeric" placeholder="HH:mm" pattern="(?:[01][0-9]|2[0-3]):[0-5][0-9]|24:00"
                   value={end}
                   onInput={(e) => setEnd(e.currentTarget.value)}
                   disabled={busy}
@@ -295,79 +375,12 @@ function App() {
               {busy ? "저장 중…" : editing ? "수정 저장" : "+ 할 일 추가"}
             </button>
             {editing && (
-              <button type="button" onClick={clearForm} disabled={busy}>
+              <button type="button" onClick={() => { clearForm(); setEditorOpen(false); }} disabled={busy}>
                 수정 취소
               </button>
             )}
           </form>
-          <ul className={styles.taskList}>
-            {daily.map((task) => (
-              <li
-                key={task.id}
-                className={task.completed ? styles.completedTask : ""}
-              >
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={task.completed}
-                    disabled={busy || loading}
-                    onChange={() =>
-                      void mutate(() =>
-                        taskRepository.setCompleted(task.id, !task.completed),
-                      )
-                    }
-                  />
-                  <span>
-                    <span>{task.title}</span>
-                    {task.startTime && (
-                      <small>
-                        {task.startTime}–{task.endTime}
-                      </small>
-                    )}
-                  </span>
-                </label>
-                <div className={styles.actions}>
-                  <button
-                    aria-label={`${task.title} 수정`}
-                    disabled={busy}
-                    onClick={() => {
-                      setEditing(task.id);
-                      setTitle(task.title);
-                      setStart(task.startTime ?? "");
-                      setEnd(task.endTime ?? "");
-                      setCategory(task.categoryId ?? "pink");
-                    }}
-                  >
-                    수정
-                  </button>
-                  <button
-                    aria-label={`${task.title} 삭제`}
-                    disabled={busy}
-                    onClick={() => {
-                      if (window.confirm(`“${task.title}”을 삭제할까요?`))
-                        void mutate(() => taskRepository.remove(task.id)).then(
-                          (saved) => {
-                            if (saved && editing === task.id) clearForm();
-                          },
-                        );
-                    }}
-                  >
-                    삭제
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
-          {!loading && !daily.length && (
-            <p className={styles.empty}>
-              아직 적어둔 할 일이 없어요.
-              <br />
-              오늘의 첫 기록을 남겨보세요 ♡
-            </p>
-          )}
-          <p className={styles.note}>기록은 이 브라우저에 저장돼요.</p>
-        </aside>
-      </div>
+      </Popup>}
       <footer className={styles.footer}>
         까먹어도 괜찮아, 여기 적어두면 돼.
       </footer>
@@ -376,3 +389,4 @@ function App() {
 }
 
 export default App;
+

@@ -21,3 +21,8 @@
 .wrapper button.completed { background: var(--task-color); }
 .completed .title { text-decoration: line-through; }
 @media (max-width: 700px) { .viewport { height: 420px; } .events { left: 48px; } .row > span { width: 48px; } .events .block { padding: 3px; } }
+.events { touch-action: none; }
+.events .slot { position: absolute; left: 0; width: 100%; height: 36px; padding: 0; border: 0; border-radius: 0; background: transparent; }
+.slot:focus-visible { outline-offset: -3px; }
+.selection { position: absolute; left: 0; right: 0; background: #eaaac166; border: 2px dashed #ac6686; pointer-events: none; z-index: 2; }
+.events .block { z-index: 3; }

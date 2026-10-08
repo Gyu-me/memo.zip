@@ -1,6 +1,7 @@
 export interface Task {
   id: string
   title: string
+  memo?: string
   date: string // YYYY-MM-DD, calendar date without UTC conversion
   startTime?: string // HH:mm
   endTime?: string
