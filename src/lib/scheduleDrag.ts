@@ -17,7 +17,7 @@ export function movedRange(start: string, end: string, targetMinutes: number) {
   return { start: format(nextStart), end: format(nextStart + duration) }
 }
 
-export function relocateTask<T extends { id: string; date: string; completed: boolean; createdAt: string; startTime?: string; endTime?: string }>(task: T, date: string, copy: boolean, newId: string, now: string, range?: { start: string; end: string }): T {
+export function relocateTask<T extends { id: string; date: string; completed: boolean; createdAt: string; startTime?: string; endTime?: string; seriesId?: string; occurrenceDate?: string }>(task: T, date: string, copy: boolean, newId: string, now: string, range?: { start: string; end: string }): T {
   return { ...task, date, ...(range ? { startTime: range.start, endTime: range.end } : {}),
-    ...(copy ? { id: newId, completed: false, createdAt: now } : {}) }
+    ...(copy ? { id: newId, completed: false, createdAt: now, seriesId: undefined, occurrenceDate: undefined } : {}) }
 }

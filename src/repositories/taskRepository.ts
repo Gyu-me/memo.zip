@@ -1,10 +1,15 @@
 import { db } from '../lib/db'
-import type { Task } from '../types/task'
+import type { Task, TaskSeries } from '../types/task'
+import { mergeOccurrences } from '../lib/recurrence'
 
 export const taskRepository = {
-  listAll: () => db.tasks.toArray(),
-  listByDate: (date: string) => db.tasks.where('date').equals(date).toArray(),
+  listAll: async (start: string, end: string) => {
+    const [stored, series] = await Promise.all([db.tasks.toArray(), db.series.toArray()])
+    return { tasks: mergeOccurrences(stored, series, start, end), series }
+  },
   save: (task: Task) => db.tasks.put(task),
-  setCompleted: (id: string, completed: boolean) => db.tasks.update(id, { completed }),
-  remove: (id: string) => db.tasks.delete(id),
+  saveSeries: (series: TaskSeries) => db.series.add(series),
+  setCompleted: (task: Task, completed: boolean) => db.tasks.put({ ...task, completed }),
+  remove: (task: Task) => task.seriesId
+    ? db.tasks.put({ ...task, deleted: true }) : db.tasks.delete(task.id),
 }

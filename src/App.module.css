@@ -69,3 +69,9 @@
 .home .dropTarget { outline: 2px dashed #ac6686; outline-offset: -3px; background: var(--accent-soft); }
 .dateField { display: flex; align-items: center; gap: 12px; font-size: 13px; }
 .dateField input { border: 1px solid var(--border); border-radius: 8px; padding: 8px; color: inherit; }
+.repeat { display: grid; gap: 12px; }
+.repeat label { display: grid; gap: 8px; }
+.repeat select, .repeat input[type='date'] { padding: 8px; border: 1px solid var(--border); border-radius: 8px; background: white; color: inherit; }
+.repeatDays { display: flex; flex-wrap: wrap; gap: 12px; }
+.repeatDays label { display: flex; align-items: center; gap: 4px; }
+.repeat .note { margin: 0; line-height: 1.6; }

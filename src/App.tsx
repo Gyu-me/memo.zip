@@ -2,7 +2,8 @@ import { useEffect, useState, type CSSProperties, type FormEvent } from "react";
 import { liveQuery } from "dexie";
 import { taskRepository } from "./repositories/taskRepository";
 import { dateKey, fromDateKey, monthDays, weekDays, shiftDate } from "./lib/calendar";
-import type { Task } from "./types/task";
+import type { Task, TaskSeries, RepeatRule } from "./types/task";
+import { repeatDescription } from './lib/recurrence';
 import styles from "./App.module.css";
 import { DayTimeline } from "./components/DayTimeline";
 import { Popup } from "./components/Popup";
@@ -36,7 +37,8 @@ function App() {
     () => new Date(new Date().getFullYear(), new Date().getMonth(), 1),
   );
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [initialLoading, setLoading] = useState(true);
+  const [loadedWindow, setLoadedWindow] = useState('');
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [title, setTitle] = useState("");
@@ -44,6 +46,15 @@ function App() {
   const [end, setEnd] = useState("");
   const [category, setCategory] = useState("pink");
   const [editing, setEditing] = useState<string | null>(null);
+  const [series, setSeries] = useState<TaskSeries[]>([]);
+  const [repeat, setRepeat] = useState<'none' | RepeatRule['frequency']>('none');
+  const [weekdays, setWeekdays] = useState<number[]>([]);
+  const [until, setUntil] = useState('');
+  const monthDates = monthDays(month);
+  const selectedWeek = weekDays(selected);
+  const windowStart = [dateKey(monthDates[0]), dateKey(selectedWeek[0])].sort()[0];
+  const windowEnd = [dateKey(monthDates[monthDates.length - 1]), dateKey(selectedWeek[6])].sort().at(-1)!;
+  const loading = initialLoading || loadedWindow !== `${windowStart}/${windowEnd}`;
 
   useEffect(() => {
     const interval = window.setInterval(
@@ -54,12 +65,15 @@ function App() {
   }, []);
 
   useEffect(() => {
-    const subscription = liveQuery(() => taskRepository.listAll()).subscribe({
+    const subscription = liveQuery(() => taskRepository.listAll(windowStart, windowEnd)).subscribe({
       next: (records) => {
-        setTasks(records);
+        setTasks(records.tasks);
+        setSeries(records.series);
+        setLoadedWindow(`${windowStart}/${windowEnd}`);
         setLoading(false);
       },
       error: () => {
+        setLoadedWindow(`${windowStart}/${windowEnd}`);
         setError(
           "기록을 읽지 못했어요. 브라우저 저장 권한을 확인하고 새로고침해주세요.",
         );
@@ -67,7 +81,7 @@ function App() {
       },
     });
     return () => subscription.unsubscribe();
-  }, []);
+  }, [windowStart, windowEnd]);
 
   const daily = tasks
     .filter((task) => task.date === selected)
@@ -84,11 +98,13 @@ function App() {
     setEnd("");
     setEditing(null);
     setMemo('');
+    setRepeat('none'); setUntil(''); setWeekdays([]);
   };
 
   const openEditor = (task?: Task, range?: { start: string; end: string }, date = task?.date ?? selected) => {
     clearForm();
     setDraftDate(date);
+    setWeekdays([fromDateKey(date).getDay()]);
     setTitle(task?.title ?? ''); setMemo(task?.memo ?? '');
     setStart(task?.startTime ?? range?.start ?? ''); setEnd(task?.endTime ?? range?.end ?? '');
     setCategory(task?.categoryId ?? 'pink'); setEditing(task?.id ?? null);
@@ -147,7 +163,11 @@ function App() {
       return;
     }
     const original = tasks.find((task) => task.id === editing);
+    if (repeat !== 'none' && ((until && until < draftDate) || (repeat === 'weekly' && !weekdays.length))) {
+      setError('종료일은 시작일 이후로 설정하고, 매주 반복은 요일을 하나 이상 선택해주세요.'); return;
+    }
     const task: Task = {
+      ...original,
       id: original?.id ?? crypto.randomUUID(),
       title: title.trim(),
       memo: memo.trim() || undefined,
@@ -158,7 +178,10 @@ function App() {
       completed: original?.completed ?? false,
       createdAt: original?.createdAt ?? new Date().toISOString(),
     };
-    if (await mutate(() => taskRepository.save(task))) { selectDate(draftDate); clearForm(); setEditorOpen(false); setNotice('일정을 저장했어요.'); }
+    const saved = await mutate(() => !editing && repeat !== 'none'
+      ? taskRepository.saveSeries({ id: task.id, template: task, rule: { frequency: repeat, weekdays: [...weekdays].sort(), until: until || undefined } })
+      : taskRepository.save(task));
+    if (saved) { selectDate(draftDate); clearForm(); setEditorOpen(false); setNotice(repeat !== 'none' ? '반복 일정을 등록했어요.' : '일정을 저장했어요.'); }
   }
 
   return (
@@ -215,7 +238,7 @@ function App() {
             onSelectDate={selectDate}
             onSelectRange={(date, start, end) => { selectDate(date); openEditor(undefined, { start, end }, date); }}
             onEdit={(task) => { selectDate(task.date); openEditor(task); }}
-            onToggle={(task) => { selectDate(task.date); void mutate(() => taskRepository.setCompleted(task.id, !task.completed)); }}
+            onToggle={(task) => { selectDate(task.date); void mutate(() => taskRepository.setCompleted(task, !task.completed)); }}
           /> : <div className={styles.calendar}>
             {["월", "화", "수", "목", "금", "토", "일"].map((day) => (
               <div className={styles.weekday} key={day}>
@@ -254,7 +277,7 @@ function App() {
                       >
                         {task.completed ? "✓ " : ""}
                         {task.startTime ? `${task.startTime} ` : ""}
-                        {task.title}
+                        {task.seriesId ? '↻ ' : ''}{task.title}
                       </button>
                     ))}
                     {entries.length > 3 && (
@@ -303,12 +326,13 @@ function App() {
                     disabled={busy || loading}
                     onChange={() =>
                       void mutate(() =>
-                        taskRepository.setCompleted(task.id, !task.completed),
+                        taskRepository.setCompleted(task, !task.completed),
                       )
                     }
                   />
                   <span>
                     <span>{task.title}</span>
+                    {task.seriesId && <small>↻ {series.find(item => item.id === task.seriesId) ? repeatDescription(series.find(item => item.id === task.seriesId)!) : '반복 일정'} · 이번 회차</small>}
                     {task.startTime && (
                       <small>
                         {task.startTime}–{task.endTime}
@@ -328,8 +352,8 @@ function App() {
                     aria-label={`${task.title} 삭제`}
                     disabled={busy}
                     onClick={() => {
-                      if (window.confirm(`“${task.title}”을 삭제할까요?`))
-                        void mutate(() => taskRepository.remove(task.id)).then(
+                      if (window.confirm(`“${task.title}”${task.seriesId ? '의 이번 회차' : ''}를 삭제할까요?`))
+                        void mutate(() => taskRepository.remove(task)).then(
                           (saved) => {
                             if (saved && editing === task.id) clearForm();
                           },
@@ -354,12 +378,13 @@ function App() {
       </div>
       {dayOpen && <Popup title={`${selected} 하루 일정`} busy={busy} onClose={() => setDayOpen(false)}>
         <div className={styles.popupNav}><button onClick={() => { const date = fromDateKey(selected); date.setDate(date.getDate() - 1); selectDate(dateKey(date)); }}>이전 날</button><button onClick={() => { const date = fromDateKey(selected); date.setDate(date.getDate() + 1); selectDate(dateKey(date)); }}>다음 날</button><button onClick={() => openEditor()}>+ 할 일 추가</button></div>
-        <DayTimeline {...dragProps} date={selected} tasks={daily} disabled={busy || loading} colorOf={colorOf} onToggle={(task) => void mutate(() => taskRepository.setCompleted(task.id, !task.completed))} onSelectRange={(start, end) => openEditor(undefined, { start, end })} onEdit={(task) => openEditor(task)} />
+        <DayTimeline {...dragProps} date={selected} tasks={daily} disabled={busy || loading} colorOf={colorOf} onToggle={(task) => void mutate(() => taskRepository.setCompleted(task, !task.completed))} onSelectRange={(start, end) => openEditor(undefined, { start, end })} onEdit={(task) => openEditor(task)} />
       </Popup>}
       {editorOpen && <Popup title={editing ? '할 일 수정' : '할 일 작성'} busy={busy} onClose={() => { clearForm(); setEditorOpen(false); }}>
         <label className={styles.dateField}>일정 날짜<input type="date" value={draftDate} disabled={busy} onInput={(e) => setDraftDate(e.currentTarget.value)} required form="task-form" /></label>
         {error && <p role="alert" className={styles.error}>{error}</p>}
           <form id="task-form" onSubmit={submit} className={styles.form}>
+            {editing && tasks.find(task => task.id === editing)?.seriesId && <p className={styles.note}>반복 일정의 이번 회차만 수정합니다. 이동·삭제도 이번 회차에만 적용돼요.</p>}
             <label htmlFor="task-title">
               {editing ? "할 일 수정" : "새로운 할 일"}
             </label>
@@ -392,6 +417,16 @@ function App() {
                 />
               </label>
             </div>
+            {!editing && <fieldset disabled={busy} className={styles.repeat}>
+              <legend>반복 일정</legend>
+              <label>반복 주기<select value={repeat} onChange={event => setRepeat(event.target.value as typeof repeat)}>
+                <option value="none">반복 안 함</option><option value="daily">매일</option><option value="weekly">매주</option><option value="monthly">매월</option>
+              </select></label>
+              {repeat === 'weekly' && <div className={styles.repeatDays} role="group" aria-label="반복 요일">
+                {[1, 2, 3, 4, 5, 6, 0].map(day => <label key={day}><input type="checkbox" checked={weekdays.includes(day)} onChange={event => setWeekdays(event.target.checked ? [...weekdays, day] : weekdays.filter(value => value !== day))} />{['일', '월', '화', '수', '목', '금', '토'][day]}</label>)}
+              </div>}
+              {repeat !== 'none' && <><label>반복 종료일 (선택)<input type="date" min={draftDate} value={until} onInput={event => setUntil(event.currentTarget.value)} /></label><p className={styles.note}>비우면 계속 반복하며, 종료일 당일까지 포함해요.{repeat === 'monthly' && ' 해당 날짜가 없는 달은 마지막 날에 표시해요.'}</p></>}
+            </fieldset>}
             <fieldset disabled={busy}>
               <legend>일정 색상</legend>
               <div className={styles.swatches}>
