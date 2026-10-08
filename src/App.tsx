@@ -1,34 +1,372 @@
-import styles from './App.module.css'
+import { useEffect, useState, type CSSProperties, type FormEvent } from "react";
+import { liveQuery } from "dexie";
+import { taskRepository } from "./repositories/taskRepository";
+import { dateKey, fromDateKey, monthDays } from "./lib/calendar";
+import type { Task } from "./types/task";
+import styles from "./App.module.css";
+
+const palette = [
+  { id: "pink", name: "분홍", color: "#eaaac1" },
+  { id: "peach", name: "피치", color: "#edb29b" },
+  { id: "yellow", name: "노랑", color: "#edd084" },
+  { id: "mint", name: "민트", color: "#c7f1d5" },
+  { id: "blue", name: "하늘", color: "#c1d9f4" },
+  { id: "purple", name: "라벤더", color: "#beaae7" },
+];
+const colorOf = (task: Task) =>
+  palette.find((item) => item.id === task.categoryId)?.color ??
+  palette[0].color;
 
 function App() {
+  const [today, setToday] = useState(() => dateKey(new Date()));
+  const [selected, setSelected] = useState(today);
+  const [month, setMonth] = useState(
+    () => new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+  );
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [title, setTitle] = useState("");
+  const [start, setStart] = useState("");
+  const [end, setEnd] = useState("");
+  const [category, setCategory] = useState("pink");
+  const [editing, setEditing] = useState<string | null>(null);
+
+  useEffect(() => {
+    const interval = window.setInterval(
+      () => setToday(dateKey(new Date())),
+      60_000,
+    );
+    return () => window.clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    const subscription = liveQuery(() => taskRepository.listAll()).subscribe({
+      next: (records) => {
+        setTasks(records);
+        setLoading(false);
+      },
+      error: () => {
+        setError(
+          "기록을 읽지 못했어요. 브라우저 저장 권한을 확인하고 새로고침해주세요.",
+        );
+        setLoading(false);
+      },
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const daily = tasks
+    .filter((task) => task.date === selected)
+    .sort(
+      (a, b) =>
+        (a.startTime ?? "99:99").localeCompare(b.startTime ?? "99:99") ||
+        a.createdAt.localeCompare(b.createdAt),
+    );
+  const completed = daily.filter((task) => task.completed).length;
+  const clearForm = () => {
+    setTitle("");
+    setStart("");
+    setEnd("");
+    setEditing(null);
+  };
+  const selectDate = (key: string) => {
+    setSelected(key);
+    const date = fromDateKey(key);
+    setMonth(new Date(date.getFullYear(), date.getMonth(), 1));
+    clearForm();
+  };
+
+  async function mutate(action: () => Promise<unknown>) {
+    setBusy(true);
+    setError("");
+    try {
+      await action();
+      return true;
+    } catch {
+      setError("저장하지 못했어요. 입력 내용은 유지되니 다시 시도해주세요.");
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!title.trim()) {
+      setError("할 일을 입력해주세요.");
+      return;
+    }
+    if ((start && !end) || (!start && end) || (start && end && end <= start)) {
+      setError(
+        "시작과 종료 시간을 함께 입력하고 종료를 시작보다 늦게 설정해주세요.",
+      );
+      return;
+    }
+    const original = tasks.find((task) => task.id === editing);
+    const task: Task = {
+      id: original?.id ?? crypto.randomUUID(),
+      title: title.trim(),
+      date: selected,
+      startTime: start || undefined,
+      endTime: end || undefined,
+      categoryId: category,
+      completed: original?.completed ?? false,
+      createdAt: original?.createdAt ?? new Date().toISOString(),
+    };
+    if (await mutate(() => taskRepository.save(task))) clearForm();
+  }
+
   return (
     <main className={styles.home}>
       <header className={styles.header}>
-        <span className={styles.dots} aria-hidden="true">● ● ●</span>
-        <span>my little corner of the internet</span>
-        <span className={styles.label}>준비 중</span>
+        <span className={styles.dots} aria-hidden="true">
+          ● ● ●
+        </span>
+        <span>memo.zip / my little corner</span>
+        <span className={styles.label}>나의 기록방 ♡</span>
       </header>
-      <div className={styles.layout}>
-        <section className={styles.content}>
+      <div className={styles.toolbar}>
+        <div>
           <p className={styles.eyebrow}>돌쇠의 작은 기록방</p>
           <h1>memo.zip</h1>
-          <p>까먹어도 괜찮아, 여기 적어두면 돼.</p>
-          <div className={styles.paper}>
-            <h2>하루하루, 차곡차곡</h2>
-            <p>일정과 메모, 작은 성취가 모일 공간이에요.</p>
-            <p className={styles.note}>개발 환경 설정이 완료되었습니다.<br />플래너 기능은 다음 단계에서 만들어갑니다.</p>
+        </div>
+        <nav className={styles.monthNav} aria-label="월 이동">
+          <button
+            aria-label="이전 달"
+            onClick={() =>
+              setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))
+            }
+          >
+            ‹
+          </button>
+          <h2>
+            {month.getFullYear()}년 {month.getMonth() + 1}월
+          </h2>
+          <button
+            aria-label="다음 달"
+            onClick={() =>
+              setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))
+            }
+          >
+            ›
+          </button>
+          <button onClick={() => selectDate(dateKey(new Date()))}>오늘</button>
+        </nav>
+      </div>
+      <div className={styles.layout}>
+        <section className={styles.content} aria-label="월간 캘린더">
+          <div className={styles.banner}>
+            <span>dear my days</span>
+            <h2>기억나는 건, 일단 적어두자.</h2>
+            <p>작은 할 일도 차곡차곡 모아두는 곳 ✿</p>
+          </div>
+          <div className={styles.calendar}>
+            {["월", "화", "수", "목", "금", "토", "일"].map((day) => (
+              <div className={styles.weekday} key={day}>
+                {day}
+              </div>
+            ))}
+            {monthDays(month).map((date) => {
+              const key = dateKey(date);
+              const entries = tasks.filter((task) => task.date === key);
+              return (
+                <button
+                  key={key}
+                  aria-label={`${key} 일정 ${entries.length}개`}
+                  aria-pressed={selected === key}
+                  className={`${styles.day} ${date.getMonth() !== month.getMonth() ? styles.outside : ""} ${selected === key ? styles.selected : ""}`}
+                  onClick={() => selectDate(key)}
+                >
+                  <span
+                    className={key === today ? styles.today : styles.dayNumber}
+                  >
+                    {date.getDate()}
+                  </span>
+                  <span className={styles.entries}>
+                    {entries.slice(0, 3).map((task) => (
+                      <span
+                        key={task.id}
+                        className={`${styles.event} ${task.completed ? styles.done : ""}`}
+                        style={
+                          { "--task-color": colorOf(task) } as CSSProperties
+                        }
+                      >
+                        {task.completed ? "✓ " : ""}
+                        {task.startTime ? `${task.startTime} ` : ""}
+                        {task.title}
+                      </span>
+                    ))}
+                    {entries.length > 3 && (
+                      <span className={styles.more}>
+                        +{entries.length - 3}개 더
+                      </span>
+                    )}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </section>
-        <aside className={styles.sidebar} aria-label="할 일 패널 미리보기">
+        <aside className={styles.sidebar} aria-label="선택 날짜 할 일">
+          <div className={styles.character} aria-hidden="true">
+            ✿
+          </div>
+          <p className={styles.eyebrow}>
+            {fromDateKey(selected).toLocaleDateString("ko-KR", {
+              month: "long",
+              day: "numeric",
+              weekday: "long",
+            })}
+          </p>
           <h2>돌쇠야, 적어!</h2>
-          <p>할 일과 하루 메모가 들어올 자리</p>
-          <div className={styles.empty}>기억나는 건<br />일단 적어두자 ♡</div>
-          <p className={styles.note}>현재는 초기 화면입니다.<br />아직 기록 입력 기능은 없어요.</p>
+          <p className={styles.progress}>
+            {completed} / {daily.length}개 완료
+          </p>
+          {loading && <p role="status">기록을 불러오는 중…</p>}
+          {error && (
+            <p className={styles.error} role="alert">
+              {error}
+            </p>
+          )}
+          <form onSubmit={submit} className={styles.form}>
+            <label htmlFor="task-title">
+              {editing ? "할 일 수정" : "새로운 할 일"}
+            </label>
+            <input
+              id="task-title"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              maxLength={120}
+              placeholder="까먹기 전에 적어두기"
+              required
+              disabled={busy || loading}
+            />
+            <div className={styles.times}>
+              <label>
+                시작 (선택)
+                <input
+                  type="time"
+                  value={start}
+                  onChange={(e) => setStart(e.target.value)}
+                  disabled={busy}
+                />
+              </label>
+              <label>
+                종료 (선택)
+                <input
+                  type="time"
+                  value={end}
+                  onChange={(e) => setEnd(e.target.value)}
+                  disabled={busy}
+                />
+              </label>
+            </div>
+            <fieldset disabled={busy}>
+              <legend>일정 색상</legend>
+              <div className={styles.swatches}>
+                {palette.map((item) => (
+                  <label
+                    key={item.id}
+                    title={item.name}
+                    style={{ "--task-color": item.color } as CSSProperties}
+                  >
+                    <input
+                      type="radio"
+                      name="category"
+                      value={item.id}
+                      checked={category === item.id}
+                      onChange={() => setCategory(item.id)}
+                      aria-label={item.name}
+                    />
+                    <span aria-hidden="true" />
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+            <button className={styles.primary} disabled={busy || loading}>
+              {busy ? "저장 중…" : editing ? "수정 저장" : "+ 할 일 추가"}
+            </button>
+            {editing && (
+              <button type="button" onClick={clearForm} disabled={busy}>
+                수정 취소
+              </button>
+            )}
+          </form>
+          <ul className={styles.taskList}>
+            {daily.map((task) => (
+              <li
+                key={task.id}
+                className={task.completed ? styles.completedTask : ""}
+              >
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={task.completed}
+                    disabled={busy || loading}
+                    onChange={() =>
+                      void mutate(() =>
+                        taskRepository.setCompleted(task.id, !task.completed),
+                      )
+                    }
+                  />
+                  <span>
+                    <span>{task.title}</span>
+                    {task.startTime && (
+                      <small>
+                        {task.startTime}–{task.endTime}
+                      </small>
+                    )}
+                  </span>
+                </label>
+                <div className={styles.actions}>
+                  <button
+                    aria-label={`${task.title} 수정`}
+                    disabled={busy}
+                    onClick={() => {
+                      setEditing(task.id);
+                      setTitle(task.title);
+                      setStart(task.startTime ?? "");
+                      setEnd(task.endTime ?? "");
+                      setCategory(task.categoryId ?? "pink");
+                    }}
+                  >
+                    수정
+                  </button>
+                  <button
+                    aria-label={`${task.title} 삭제`}
+                    disabled={busy}
+                    onClick={() => {
+                      if (window.confirm(`“${task.title}”을 삭제할까요?`))
+                        void mutate(() => taskRepository.remove(task.id)).then(
+                          (saved) => {
+                            if (saved && editing === task.id) clearForm();
+                          },
+                        );
+                    }}
+                  >
+                    삭제
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+          {!loading && !daily.length && (
+            <p className={styles.empty}>
+              아직 적어둔 할 일이 없어요.
+              <br />
+              오늘의 첫 기록을 남겨보세요 ♡
+            </p>
+          )}
+          <p className={styles.note}>기록은 이 브라우저에 저장돼요.</p>
         </aside>
       </div>
-      <footer className={styles.footer}>오늘의 작은 기록이 내일의 나를 도와줄 거야.</footer>
+      <footer className={styles.footer}>
+        까먹어도 괜찮아, 여기 적어두면 돼.
+      </footer>
     </main>
-  )
+  );
 }
 
-export default App
+export default App;
