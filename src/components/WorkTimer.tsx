@@ -5,6 +5,7 @@ import type { TimerState, TimerRecord } from '../types/timer'
 import { timerRepository } from '../repositories/timerRepository'
 import { elapsedTime, formatDuration } from '../lib/timer'
 import styles from './WorkTimer.module.css'
+import { TimerImageSettings } from './TimerImageSettings'
 
 export function WorkTimer({ date, tasks }: { date: string; tasks: Task[] }) {
   const [active, setActive] = useState<TimerState>()
@@ -44,6 +45,7 @@ export function WorkTimer({ date, tasks }: { date: string; tasks: Task[] }) {
   return <section className={styles.timer} aria-label="작업 타이머">
     <h3>나의 집중 시간</h3>
     <p className={styles.status}>{active ? active.runningSince === null ? '잠깐 쉬는 중' : '작업 중' : '시작할 준비 완료'}</p>
+    <TimerImageSettings mood={active ? active.runningSince === null ? 'paused' : 'running' : 'idle'} />
     <div className={styles.clock} aria-label="현재 작업 시간">{formatDuration(active ? elapsedTime(active, now) : 0)}</div>
     {active ? <><p className={styles.title}>{active.title}</p><p className={styles.note}>시작 날짜 {active.date}에 기록돼요.</p><div className={styles.actions}>
       <button disabled={busy || !ready} onClick={() => void act(active.runningSince === null ? 'resume' : 'pause')}>{active.runningSince === null ? '계속하기' : '일시정지'}</button>

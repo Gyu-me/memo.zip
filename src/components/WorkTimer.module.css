@@ -12,3 +12,7 @@
 .timer li span { overflow-wrap: anywhere; min-width: 0; }
 .timer strong { white-space: nowrap; font-variant-numeric: tabular-nums; }
 .error { color: #963434; font-size: 12px; line-height: 1.6; }
+.imageSettings { margin-bottom: 12px; font-size: 12px; }
+.imageSettings summary { cursor: pointer; padding: 8px 0; }
+.imageSetting { border-top: 1px solid var(--border); padding: 8px 0; }
+.imageSetting input { max-width: 100%; font-size: 11px; }
