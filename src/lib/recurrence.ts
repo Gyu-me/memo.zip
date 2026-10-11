@@ -6,7 +6,7 @@ export function isOccurrence(series: TaskSeries, date: string): boolean {
   const current = fromDateKey(date)
   if (series.rule.frequency === 'daily') return true
   if (series.rule.frequency === 'weekly') return series.rule.weekdays.includes(current.getDay())
-  const anchor = fromDateKey(series.template.date).getDate()
+  const anchor = series.rule.monthDay ?? fromDateKey(series.template.date).getDate()
   const lastDay = new Date(current.getFullYear(), current.getMonth() + 1, 0).getDate()
   return current.getDate() === Math.min(anchor, lastDay)
 }
@@ -33,5 +33,5 @@ export function repeatDescription(series: TaskSeries): string {
   const rule = series.rule
   return rule.frequency === 'daily' ? '매일' : rule.frequency === 'weekly'
     ? `매주 ${rule.weekdays.map(day => labels[day]).join('·')}`
-    : `매월 ${fromDateKey(series.template.date).getDate()}일 (없는 날은 말일)`
+    : `매월 ${rule.monthDay ?? fromDateKey(series.template.date).getDate()}일 (없는 날은 말일)`
 }

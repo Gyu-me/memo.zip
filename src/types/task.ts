@@ -16,11 +16,15 @@ export interface Task {
 export interface RepeatRule {
   frequency: 'daily' | 'weekly' | 'monthly'
   weekdays: number[] // Sunday = 0
+  monthDay?: number // Anchor survives a split on February's last day
   until?: string // Inclusive calendar date; absent means no end
 }
 
 export interface TaskSeries {
   id: string
+  groupId?: string // Links segments created by "this and following"
   template: Task
   rule: RepeatRule
 }
+
+export type RepeatScope = 'one' | 'following' | 'all'

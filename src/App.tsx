@@ -2,8 +2,9 @@ import { useEffect, useState, type CSSProperties, type FormEvent } from "react";
 import { liveQuery } from "dexie";
 import { taskRepository } from "./repositories/taskRepository";
 import { dateKey, fromDateKey, monthDays, weekDays, shiftDate } from "./lib/calendar";
-import type { Task, TaskSeries, RepeatRule } from "./types/task";
+import type { Task, TaskSeries, RepeatRule, RepeatScope } from "./types/task";
 import { repeatDescription } from './lib/recurrence';
+import { seriesGroup } from './lib/seriesChanges';
 import styles from "./App.module.css";
 import { DayTimeline } from "./components/DayTimeline";
 import { Popup } from "./components/Popup";
@@ -50,6 +51,12 @@ function App() {
   const [repeat, setRepeat] = useState<'none' | RepeatRule['frequency']>('none');
   const [weekdays, setWeekdays] = useState<number[]>([]);
   const [until, setUntil] = useState('');
+  const [monthDay, setMonthDay] = useState(1);
+  const [scope, setScope] = useState<RepeatScope>('one');
+  const [deleting, setDeleting] = useState<Task | null>(null);
+  const [deleteScope, setDeleteScope] = useState<RepeatScope>('one');
+  const editingTask = tasks.find(task => task.id === editing);
+  const editingSeries = series.find(item => item.id === editingTask?.seriesId);
   const monthDates = monthDays(month);
   const selectedWeek = weekDays(selected);
   const windowStart = [dateKey(monthDates[0]), dateKey(selectedWeek[0])].sort()[0];
@@ -99,12 +106,14 @@ function App() {
     setEditing(null);
     setMemo('');
     setRepeat('none'); setUntil(''); setWeekdays([]);
+    setScope('one');
   };
 
   const openEditor = (task?: Task, range?: { start: string; end: string }, date = task?.date ?? selected) => {
     clearForm();
     setDraftDate(date);
     setWeekdays([fromDateKey(date).getDay()]);
+    setMonthDay(fromDateKey(date).getDate());
     setTitle(task?.title ?? ''); setMemo(task?.memo ?? '');
     setStart(task?.startTime ?? range?.start ?? ''); setEnd(task?.endTime ?? range?.end ?? '');
     setCategory(task?.categoryId ?? 'pink'); setEditing(task?.id ?? null);
@@ -116,6 +125,30 @@ function App() {
     setMonth(new Date(date.getFullYear(), date.getMonth(), 1));
     clearForm();
   };
+
+  const selectScope = (value: RepeatScope) => {
+    if (!editingTask || !editingSeries) return;
+    setScope(value);
+    const group = seriesGroup(series, editingSeries);
+    const source = value === 'all' ? group[0] : editingSeries;
+    const content = value === 'one' ? editingTask : source.template;
+    setTitle(content.title); setMemo(content.memo ?? ''); setCategory(content.categoryId ?? 'pink');
+    setStart(content.startTime ?? ''); setEnd(content.endTime ?? '');
+    setDraftDate(value === 'one' ? editingTask.date : value === 'all' ? group[0].template.date : editingTask.occurrenceDate ?? editingTask.date);
+    setRepeat(value === 'one' ? 'none' : source.rule.frequency);
+    setWeekdays([...source.rule.weekdays]);
+    setMonthDay(source.rule.monthDay ?? fromDateKey(source.template.date).getDate());
+    // Whole-group edits use the final segment's end, rather than a split boundary.
+    setUntil(value === 'one' ? '' : group[group.length - 1].rule.until ?? '');
+    setError('');
+  };
+
+  async function deleteSelected() {
+    if (!deleting || busy) return;
+    const saved = await mutate(() => deleteScope === 'one' ? taskRepository.remove(deleting)
+      : taskRepository.changeSeries(deleting, deleteScope));
+    if (saved) { setDeleting(null); setNotice('선택한 범위의 일정을 삭제했어요.'); }
+  }
 
   async function mutate(action: () => Promise<unknown>) {
     setBusy(true);
@@ -163,8 +196,15 @@ function App() {
       return;
     }
     const original = tasks.find((task) => task.id === editing);
+    const bulkEdit = !!original?.seriesId && scope !== 'one';
+    if (bulkEdit && (repeat === 'none' || (scope === 'following' && draftDate < (original.occurrenceDate ?? original.date)))) {
+      setError('반복 주기를 선택하고, 이후 일정의 시작일은 선택한 회차 이후로 설정해주세요.'); return;
+    }
     if (repeat !== 'none' && ((until && until < draftDate) || (repeat === 'weekly' && !weekdays.length))) {
       setError('종료일은 시작일 이후로 설정하고, 매주 반복은 요일을 하나 이상 선택해주세요.'); return;
+    }
+    if (repeat === 'monthly' && (!Number.isInteger(monthDay) || monthDay < 1 || monthDay > 31)) {
+      setError('매월 반복 날짜는 1일부터 31일 사이로 입력해주세요.'); return;
     }
     const task: Task = {
       ...original,
@@ -178,8 +218,12 @@ function App() {
       completed: original?.completed ?? false,
       createdAt: original?.createdAt ?? new Date().toISOString(),
     };
-    const saved = await mutate(() => !editing && repeat !== 'none'
-      ? taskRepository.saveSeries({ id: task.id, template: task, rule: { frequency: repeat, weekdays: [...weekdays].sort(), until: until || undefined } })
+    const saved = await mutate(() => bulkEdit && original
+      ? taskRepository.changeSeries(original, scope as 'following' | 'all', {
+        id: crypto.randomUUID(), template: task,
+        rule: { frequency: repeat as RepeatRule['frequency'], weekdays: [...weekdays].sort(), monthDay: repeat === 'monthly' ? monthDay : undefined, until: until || undefined },
+      }) : !editing && repeat !== 'none'
+      ? taskRepository.saveSeries({ id: task.id, template: task, rule: { frequency: repeat, weekdays: [...weekdays].sort(), monthDay: repeat === 'monthly' ? monthDay : undefined, until: until || undefined } })
       : taskRepository.save(task));
     if (saved) { selectDate(draftDate); clearForm(); setEditorOpen(false); setNotice(repeat !== 'none' ? '반복 일정을 등록했어요.' : '일정을 저장했어요.'); }
   }
@@ -352,6 +396,7 @@ function App() {
                     aria-label={`${task.title} 삭제`}
                     disabled={busy}
                     onClick={() => {
+                      if (task.seriesId) { setDeleting(task); setDeleteScope('one'); setError(''); return; }
                       if (window.confirm(`“${task.title}”${task.seriesId ? '의 이번 회차' : ''}를 삭제할까요?`))
                         void mutate(() => taskRepository.remove(task)).then(
                           (saved) => {
@@ -381,10 +426,16 @@ function App() {
         <DayTimeline {...dragProps} date={selected} tasks={daily} disabled={busy || loading} colorOf={colorOf} onToggle={(task) => void mutate(() => taskRepository.setCompleted(task, !task.completed))} onSelectRange={(start, end) => openEditor(undefined, { start, end })} onEdit={(task) => openEditor(task)} />
       </Popup>}
       {editorOpen && <Popup title={editing ? '할 일 수정' : '할 일 작성'} busy={busy} onClose={() => { clearForm(); setEditorOpen(false); }}>
-        <label className={styles.dateField}>일정 날짜<input type="date" value={draftDate} disabled={busy} onInput={(e) => setDraftDate(e.currentTarget.value)} required form="task-form" /></label>
+        <label className={styles.dateField}>{editingSeries && scope !== 'one' ? '반복 시작일' : '일정 날짜'}<input type="date" value={draftDate} disabled={busy} onInput={(e) => { setDraftDate(e.currentTarget.value); if (e.currentTarget.value && !editing) setMonthDay(fromDateKey(e.currentTarget.value).getDate()); }} required form="task-form" /></label>
         {error && <p role="alert" className={styles.error}>{error}</p>}
           <form id="task-form" onSubmit={submit} className={styles.form}>
-            {editing && tasks.find(task => task.id === editing)?.seriesId && <p className={styles.note}>반복 일정의 이번 회차만 수정합니다. 이동·삭제도 이번 회차에만 적용돼요.</p>}
+            {editingSeries && <fieldset disabled={busy} className={styles.repeat}>
+              <legend>수정 적용 범위</legend>
+              <label>적용 범위<select aria-label="수정 적용 범위" value={scope} onChange={event => selectScope(event.target.value as RepeatScope)}>
+                <option value="one">이번 일정만</option><option value="following">이번부터 이후 일정</option><option value="all">전체 반복 일정</option>
+              </select></label>
+              <p className={styles.note}>{scope === 'one' ? '이번 회차만 수정합니다. 드래그 이동도 이번 회차에만 적용돼요.' : '범위를 바꾸면 해당 반복 규칙의 내용으로 입력창이 바뀝니다. 완료한 기록은 유지하고, 미완료 일정에 새 내용을 적용해요.'}</p>
+            </fieldset>}
             <label htmlFor="task-title">
               {editing ? "할 일 수정" : "새로운 할 일"}
             </label>
@@ -417,14 +468,15 @@ function App() {
                 />
               </label>
             </div>
-            {!editing && <fieldset disabled={busy} className={styles.repeat}>
+            {(!editing || (editingSeries && scope !== 'one')) && <fieldset disabled={busy} className={styles.repeat}>
               <legend>반복 일정</legend>
               <label>반복 주기<select value={repeat} onChange={event => setRepeat(event.target.value as typeof repeat)}>
-                <option value="none">반복 안 함</option><option value="daily">매일</option><option value="weekly">매주</option><option value="monthly">매월</option>
+                {!editing && <option value="none">반복 안 함</option>}<option value="daily">매일</option><option value="weekly">매주</option><option value="monthly">매월</option>
               </select></label>
               {repeat === 'weekly' && <div className={styles.repeatDays} role="group" aria-label="반복 요일">
                 {[1, 2, 3, 4, 5, 6, 0].map(day => <label key={day}><input type="checkbox" checked={weekdays.includes(day)} onChange={event => setWeekdays(event.target.checked ? [...weekdays, day] : weekdays.filter(value => value !== day))} />{['일', '월', '화', '수', '목', '금', '토'][day]}</label>)}
               </div>}
+              {repeat === 'monthly' && <label>매월 반복 날짜<input type="number" min="1" max="31" required value={monthDay} onInput={event => setMonthDay(Number(event.currentTarget.value))} /></label>}
               {repeat !== 'none' && <><label>반복 종료일 (선택)<input type="date" min={draftDate} value={until} onInput={event => setUntil(event.currentTarget.value)} /></label><p className={styles.note}>비우면 계속 반복하며, 종료일 당일까지 포함해요.{repeat === 'monthly' && ' 해당 날짜가 없는 달은 마지막 날에 표시해요.'}</p></>}
             </fieldset>}
             <fieldset disabled={busy}>
@@ -452,13 +504,22 @@ function App() {
             <button className={styles.primary} disabled={busy || loading}>
               {busy ? "저장 중…" : editing ? "수정 저장" : "+ 할 일 추가"}
             </button>
-{editing && <button type="button" disabled={busy} onClick={() => { setEditing(null); setNotice("복사할 내용을 확인하고 저장해주세요."); }}>복제해서 새 일정 작성</button>}
+{editing && <button type="button" disabled={busy} onClick={() => { setEditing(null); setScope('one'); setRepeat('none'); setUntil(''); setNotice("복사할 내용을 확인하고 저장해주세요."); }}>복제해서 새 일정 작성</button>}
             {editing && (
               <button type="button" onClick={() => { clearForm(); setEditorOpen(false); }} disabled={busy}>
                 수정 취소
               </button>
             )}
           </form>
+      </Popup>}
+      {deleting && <Popup title="반복 일정 삭제" busy={busy} onClose={() => setDeleting(null)}>
+        <p>“{deleting.title}”을 어느 범위에서 삭제할까요?</p>
+        <label className={styles.dateField}>삭제 적용 범위<select aria-label="삭제 적용 범위" value={deleteScope} disabled={busy} onChange={event => setDeleteScope(event.target.value as RepeatScope)}>
+          <option value="one">이번 일정만</option><option value="following">이번부터 이후 일정</option><option value="all">전체 반복 일정</option>
+        </select></label>
+        <p className={styles.note}>{deleteScope === 'one' ? '다른 회차는 유지됩니다.' : deleteScope === 'following' ? `${deleting.occurrenceDate ?? deleting.date}부터 반복을 중단하고 해당 범위의 기록을 삭제합니다. 이전 기록은 유지됩니다.` : '이 반복 그룹의 완료 기록과 개별 수정 기록도 모두 삭제합니다.'}</p>
+        {error && <p role="alert" className={styles.error}>{error}</p>}
+        <div className={styles.popupNav}><button disabled={busy} onClick={() => void deleteSelected()}>{busy ? '삭제 중…' : '선택한 범위 삭제'}</button><button disabled={busy} onClick={() => setDeleting(null)}>취소</button></div>
       </Popup>}
       <footer className={styles.footer}>
         까먹어도 괜찮아, 여기 적어두면 돼.
