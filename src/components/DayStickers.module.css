@@ -7,7 +7,11 @@
 .viewport { height: 520px; overflow-y: auto; position: relative; }
 .surface { position: relative; height: 1764px; }
 .overlay { position: absolute; inset: 0; z-index: 5; overflow: hidden; }
-.overlay .sticker { position: absolute; background: transparent; border: 0; padding: 0; display: grid; place-items: center; touch-action: none; cursor: grab; }
+.overlay .sticker { position: absolute; touch-action: none; }
+.sticker .move { background: transparent; border: 0; padding: 0; display: grid; place-items: center; width: 100%; height: 100%; touch-action: none; cursor: grab; }
+.sticker .handle { position: absolute; width: 32px; height: 32px; border: 1px solid #ac6686; padding: 0; background: white; color: #824461; border-radius: 50%; display: grid; place-items: center; font-size: 20px; touch-action: none; }
+.resize { right: -16px; bottom: -16px; cursor: nwse-resize; }
+.rotate { top: -42px; left: calc(50% - 16px); cursor: crosshair; }
 .sticker img { width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
 .sticker span { line-height: 1; pointer-events: none; }
 .overlay .selected { outline: 2px dashed #ac6686; outline-offset: 4px; }
