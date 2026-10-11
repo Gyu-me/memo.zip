@@ -30,6 +30,7 @@ export function DayMemo({ date }: { date: string }) {
     } catch { setError('저장하지 못했어요. 내용을 유지했으니 다시 시도해주세요.') }
     finally { setBusy(false) }
   }
+  const dirty = content !== saved
   return <section className={styles.memo} aria-label="하루 메모">
     <h3>오늘의 작은 메모</h3>
     <p>{date}</p>
@@ -38,7 +39,7 @@ export function DayMemo({ date }: { date: string }) {
     {loading && !error && <p role="status">메모를 불러오는 중…</p>}
     {error && <p role="alert">{error}</p>}
     {notice && <p role="status">{notice}</p>}
-    <div className={styles.actions}><small>{content.length.toLocaleString()} / 10,000자{content !== saved ? ' · 저장 전' : ''}</small><button disabled={loading || busy || content === saved} onClick={() => void save()}>{busy ? '저장 중…' : '메모 저장'}</button></div>
+    <div className={styles.actions}><small>{content.length.toLocaleString()} / 10,000자{dirty ? ' · 저장 전' : ''}</small><button disabled={loading || busy || !dirty} onClick={() => void save()}>{busy ? '저장 중…' : '메모 저장'}</button></div>
     <small>날짜를 이동하기 전에 저장해주세요.</small>
   </section>
 }

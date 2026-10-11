@@ -1,0 +1,14 @@
+.tools { padding: 12px 18px; border-bottom: 1px solid var(--border); display: flex; align-items: center; flex-wrap: wrap; gap: 10px; background: var(--accent-soft); }
+.tools p, .tools small { width: 100%; margin: 0; font-size: 12px; }
+.tools label { font-size: 12px; }
+.tools input[type='file'] { display: block; max-width: 100%; }
+.presets, .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.controls label { display: grid; gap: 4px; }
+.viewport { height: 520px; overflow-y: auto; position: relative; }
+.surface { position: relative; height: 1764px; }
+.overlay { position: absolute; inset: 0; z-index: 5; overflow: hidden; }
+.overlay .sticker { position: absolute; background: transparent; border: 0; padding: 0; display: grid; place-items: center; touch-action: none; cursor: grab; }
+.sticker img { width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
+.sticker span { line-height: 1; pointer-events: none; }
+.overlay .selected { outline: 2px dashed #ac6686; outline-offset: 4px; }
+@media (max-width: 700px) { .viewport { height: 420px; } }
