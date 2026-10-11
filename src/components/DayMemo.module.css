@@ -1,0 +1,7 @@
+.memo { margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--border); }
+.memo h3 { margin: 0 0 8px; font-size: 16px; }
+.memo p, .memo small { font-size: 12px; color: var(--muted); }
+.memo label { display: block; margin: 12px 0 8px; font-size: 13px; }
+.memo textarea { width: 100%; box-sizing: border-box; resize: vertical; min-height: 120px; padding: 12px; font: inherit; line-height: 1.6; color: inherit; background: var(--paper); border: 1px solid var(--border); border-radius: 12px; }
+.actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 10px 0; }
+

@@ -12,6 +12,7 @@ import { WeekTimeline } from "./components/WeekTimeline";
 import { relocateTask, type ScheduleDrag } from './lib/scheduleDrag';
 import { WorkTimer } from './components/WorkTimer';
 import { AnniversaryBanner } from './components/AnniversaryBanner';
+import { DayMemo } from './components/DayMemo';
 
 const palette = [
   { id: "pink", name: "분홍", color: "#eaaac1" },
@@ -418,6 +419,7 @@ function App() {
           )}
           <p className={styles.note}>기록은 이 브라우저에 저장돼요.</p>
           <WorkTimer date={selected} tasks={daily} />
+          <DayMemo key={selected} date={selected} />
         </aside>
       </div>
       {dayOpen && <Popup title={`${selected} 하루 일정`} busy={busy} onClose={() => setDayOpen(false)}>
