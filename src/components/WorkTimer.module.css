@@ -1,0 +1,14 @@
+.timer { border-top: 1px solid var(--border); margin-top: 24px; padding-top: 16px; }
+.timer h3 { font-size: 16px; margin: 0 0 10px; }
+.status, .note { color: var(--muted); font-size: 12px; line-height: 1.6; }
+.clock { font-size: 30px; font-variant-numeric: tabular-nums; font-weight: bold; padding: 14px; text-align: center; background: var(--accent-soft); border-radius: 12px; }
+.title { overflow-wrap: anywhere; font-size: 13px; }
+.timer label { display: grid; gap: 8px; font-size: 12px; margin: 12px 0; }
+.timer select { width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--paper); color: inherit; }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.timer h4 { font-size: 12px; }
+.timer ul { list-style: none; padding: 0; max-height: 200px; overflow: auto; }
+.timer li { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px dashed var(--border); font-size: 12px; }
+.timer li span { overflow-wrap: anywhere; min-width: 0; }
+.timer strong { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.error { color: #963434; font-size: 12px; line-height: 1.6; }
