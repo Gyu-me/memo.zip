@@ -11,6 +11,7 @@ import { Popup } from "./components/Popup";
 import { WeekTimeline } from "./components/WeekTimeline";
 import { relocateTask, type ScheduleDrag } from './lib/scheduleDrag';
 import { WorkTimer } from './components/WorkTimer';
+import { AnniversaryBanner } from './components/AnniversaryBanner';
 
 const palette = [
   { id: "pink", name: "분홍", color: "#eaaac1" },
@@ -274,11 +275,7 @@ function App() {
       {notice && <p role="status" className={styles.note}>{notice}</p>}
       <div className={styles.layout}>
         <section className={styles.content} aria-label={view === 'month' ? '월간 캘린더' : '주간 플래너'}>
-          <div className={styles.banner}>
-            <span>dear my days</span>
-            <h2>기억나는 건, 일단 적어두자.</h2>
-            <p>작은 할 일도 차곡차곡 모아두는 곳 ✿</p>
-          </div>
+          <AnniversaryBanner today={today} />
           {view === 'week' ? <WeekTimeline {...dragProps} selected={selected} today={today} tasks={tasks} disabled={busy || loading} colorOf={colorOf}
             onSelectDate={selectDate}
             onSelectRange={(date, start, end) => { selectDate(date); openEditor(undefined, { start, end }, date); }}
